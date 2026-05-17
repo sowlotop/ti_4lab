@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ЭЦП на основе RSA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
+        <span class="navbar-brand fw-bold">Электронная цифровая подпись (RSA)</span>
+        <span class="navbar-text text-secondary small">Хеш-функция 3.2 · H₀=100</span>
+    </div>
+</nav>
+
+<div class="container pb-5">
+
+    <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="sign-btn" data-bs-toggle="tab" data-bs-target="#sign-pane"
+                    type="button" role="tab">Подписать файл
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="verify-btn" data-bs-toggle="tab" data-bs-target="#verify-pane"
+                    type="button" role="tab">Проверить подпись
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        <!-- ==================== SIGN TAB ==================== -->
+        <div class="tab-pane fade" id="sign-pane" role="tabpanel">
+
+            <div class="row g-4">
+                <!-- Sign Form -->
+                <div class="col-lg-5">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-primary text-white">
+                            <strong>Параметры подписи</strong>
+                        </div>
+                        <div class="card-body">
+
+                            <div th:if="${signError}" class="alert alert-danger py-2" th:text="${signError}"></div>
+
+                            <form method="post" action="/sign" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Простое число p</label>
+                                    <input type="text" name="p" class="form-control font-monospace"
+                                           th:value="${inputP}" placeholder="например: 61" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Простое число q</label>
+                                    <input type="text" name="q" class="form-control font-monospace"
+                                           th:value="${inputQ}" placeholder="например: 53" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Закрытый ключ d</label>
+                                    <input type="text" name="d" class="form-control font-monospace"
+                                           th:value="${inputD}" placeholder="1 &lt; d &lt; φ(n), НОД(d,φ(n))=1" required>
+                                    <div class="form-text">Должен быть взаимно прост с φ(n) = (p−1)(q−1)</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Текстовый файл</label>
+                                    <input type="file" name="file" class="form-control" accept=".txt,text/plain" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    Вычислить хеш и подписать
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Algorithm hint -->
+                    <div class="card mt-3 shadow-sm border-info">
+                        <div class="card-body small text-muted">
+                            <strong>Алгоритм:</strong><br>
+                            n = p·q &nbsp;|&nbsp; φ(n) = (p−1)(q−1)<br>
+                            H<sub>i</sub> = (H<sub>i−1</sub> + M<sub>i</sub>)² mod n, H<sub>0</sub>=100<br>
+                            S = h(M)<sup>d</sup> mod n<br>
+                            Проверка: S<sup>e</sup> mod n = h(M')
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sign Results -->
+                <div class="col-lg-7" th:if="${signSuccess}">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-success text-white">
+                            <strong>Результаты подписания</strong>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-bordered table-sm align-middle">
+                                <tbody>
+                                <tr>
+                                    <th class="table-light w-40">n = p·q</th>
+                                    <td class="font-monospace text-break" th:text="${signN}"></td>
+                                </tr>
+                                <tr>
+                                    <th class="table-light">φ(n) = (p−1)(q−1)</th>
+                                    <td class="font-monospace text-break" th:text="${signPhi}"></td>
+                                </tr>
+                                <tr>
+                                    <th class="table-light">Открытый ключ e</th>
+                                    <td class="font-monospace text-break text-primary fw-bold" th:text="${signE}"></td>
+                                </tr>
+                                <tr class="table-warning">
+                                    <th>Хеш h(M) (десятичн.)</th>
+                                    <td class="font-monospace fw-bold fs-5" th:text="${signHash}"></td>
+                                </tr>
+                                <tr class="table-success">
+                                    <th>Цифровая подпись S</th>
+                                    <td class="font-monospace fw-bold fs-5 text-break" th:text="${signSignature}"></td>
+                                </tr>
+                                </tbody>
+                            </table>
+
+                            <hr>
+                            <label class="form-label fw-semibold">Подписанный файл (исходный текст + подпись):</label>
+                            <textarea id="signedContent" class="form-control font-monospace bg-light"
+                                      rows="8" readonly th:text="${signedContent}"></textarea>
+                            <input type="hidden" id="downloadName" th:value="${downloadName}">
+
+                            <button class="btn btn-success mt-3 w-100" onclick="downloadSigned()">
+                                Скачать подписанный файл
+                            </button>
+
+                            <div class="alert alert-info mt-3 small mb-0">
+                                <strong>Открытый ключ для проверки:</strong> e = <span
+                                    class="font-monospace fw-bold" th:text="${signE}"></span>,
+                                n = <span class="font-monospace fw-bold" th:text="${signN}"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== VERIFY TAB ==================== -->
+        <div class="tab-pane fade" id="verify-pane" role="tabpanel">
+
+            <div class="row g-4">
+                <!-- Verify Form -->
+                <div class="col-lg-5">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-secondary text-white">
+                            <strong>Проверка подписи</strong>
+                        </div>
+                        <div class="card-body">
+
+                            <div th:if="${verifyError}" class="alert alert-danger py-2" th:text="${verifyError}"></div>
+
+                            <form method="post" action="/verify" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Открытый ключ e</label>
+                                    <input type="text" name="e" class="form-control font-monospace"
+                                           th:value="${inputE}" placeholder="открытая экспонента" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Модуль n (= p·q)</label>
+                                    <input type="text" name="n" class="form-control font-monospace"
+                                           th:value="${inputN}" placeholder="модуль RSA" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Подписанный файл</label>
+                                    <input type="file" name="file" class="form-control" accept=".txt,text/plain" required>
+                                </div>
+                                <button type="submit" class="btn btn-secondary w-100">
+                                    Проверить подпись
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Verify Results -->
+                <div class="col-lg-7" th:if="${verifyDone}">
+                    <div class="card shadow-sm">
+                        <div class="card-header text-white"
+                             th:classappend="${verifyValid} ? 'bg-success' : 'bg-danger'">
+                            <strong th:text="${verifyValid} ? 'Подпись ВЕРНА ✓' : 'Подпись НЕДЕЙСТВИТЕЛЬНА ✗'"></strong>
+                        </div>
+                        <div class="card-body">
+
+                            <div class="alert mb-3 py-2"
+                                 th:classappend="${verifyValid} ? 'alert-success' : 'alert-danger'">
+                                <strong th:text="${verifyValid}
+                                    ? 'Хеш-образы совпадают — сообщение не изменено, подпись принадлежит владельцу ключа.'
+                                    : 'Хеш-образы НЕ совпадают — сообщение изменено или подпись поддельная.'">
+                                </strong>
+                            </div>
+
+                            <table class="table table-bordered table-sm align-middle">
+                                <tbody>
+                                <tr>
+                                    <th class="table-light w-50">Подпись S (из файла)</th>
+                                    <td class="font-monospace text-break" th:text="${verifySignature}"></td>
+                                </tr>
+                                <tr th:classappend="${verifyValid} ? 'table-success' : 'table-warning'">
+                                    <th>Вычисленный хеш h(M')</th>
+                                    <td class="font-monospace fw-bold fs-5" th:text="${verifyComputedHash}"></td>
+                                </tr>
+                                <tr th:classappend="${verifyValid} ? 'table-success' : 'table-danger'">
+                                    <th>Извлечённый хеш S<sup>e</sup> mod n</th>
+                                    <td class="font-monospace fw-bold fs-5" th:text="${verifyRecoveredHash}"></td>
+                                </tr>
+                                <tr>
+                                    <th class="table-light">Результат сравнения</th>
+                                    <td>
+                                        <span class="badge fs-6"
+                                              th:classappend="${verifyValid} ? 'bg-success' : 'bg-danger'"
+                                              th:text="${verifyValid} ? 'h(M\') = S^e mod n  ✓' : 'h(M\') ≠ S^e mod n  ✗'">
+                                        </span>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+
+                            <div th:if="${verifyMessage}" class="mt-3">
+                                <label class="form-label fw-semibold small">Проверяемое сообщение:</label>
+                                <div class="border rounded p-2 bg-light font-monospace small text-break"
+                                     th:text="${verifyMessage}"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab-content -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    const activeTab = /*[[${activeTab}]]*/ 'sign';
+    document.addEventListener('DOMContentLoaded', function () {
+        const btn = document.getElementById(activeTab + '-btn');
+        if (btn) {
+            const tab = new bootstrap.Tab(btn);
+            tab.show();
+        }
+    });
+
+    function downloadSigned() {
+        const content = document.getElementById('signedContent').value;
+        const filename = document.getElementById('downloadName').value;
+        const blob = new Blob([content], {type: 'text/plain;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+</body>
+</html>

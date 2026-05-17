@@ -1,0 +1,7 @@
+body { font-family: 'Segoe UI', sans-serif; }
+.w-40 { width: 40%; }
+.font-monospace { font-family: 'Consolas', 'Courier New', monospace; }
+.nav-tabs .nav-link { font-weight: 500; }
+.card { border-radius: 8px; }
+.table th { white-space: nowrap; vertical-align: middle; }
+textarea { font-size: 0.82rem; }
